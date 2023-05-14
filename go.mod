@@ -2,7 +2,10 @@ module github.com/Avash027/midDB
 
 go 1.18
 
-require github.com/rs/zerolog v1.29.1
+require (
+	github.com/rs/zerolog v1.29.1
+	gopkg.in/yaml.v2 v2.4.0
+)
 
 require (
 	github.com/mattn/go-colorable v0.1.12 // indirect

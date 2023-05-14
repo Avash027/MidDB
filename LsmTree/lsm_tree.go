@@ -23,24 +23,23 @@ type LSMTree struct {
 	MaxElementsBeforeFlush int
 }
 
-func InitNewLSMTree() *LSMTree {
+func InitNewLSMTree(maxElementsBeforeFlush int, compactionPeriod int) *LSMTree {
 	lsmTree := &LSMTree{
 		tree:                   &TreeNode{},
 		secondaryTree:          &TreeNode{},
 		diskBlocks:             []DiskBlock{},
-		MaxElementsBeforeFlush: 256,
+		MaxElementsBeforeFlush: maxElementsBeforeFlush,
 	}
 
-	go lsmTree.PeriodicCompaction()
+	go lsmTree.PeriodicCompaction(compactionPeriod)
 	return lsmTree
 
 }
 
-func (lsmTree *LSMTree) PeriodicCompaction() {
-	logs := logger.GetLogger()
+func (lsmTree *LSMTree) PeriodicCompaction(compactionPeriod int) {
+
 	for {
-		time.Sleep(1 * time.Second)
-		logs.Debug().Msg("Compaction started")
+		time.Sleep(time.Duration(compactionPeriod) * time.Second)
 		var db1, db2 DiskBlock
 
 		lsmTree.diskReadWriteLock.RLock()
@@ -51,7 +50,6 @@ func (lsmTree *LSMTree) PeriodicCompaction() {
 		}
 
 		if db1.Empty() || db2.Empty() {
-			logs.Debug().Msg("Compaction not needed")
 			continue
 		}
 

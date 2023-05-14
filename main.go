@@ -1,45 +1,35 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"net"
+	"flag"
 
+	"github.com/Avash027/midDB/LsmTree"
+	"github.com/Avash027/midDB/config"
 	"github.com/Avash027/midDB/logger"
+	"github.com/Avash027/midDB/server"
 )
 
 func main() {
-	logger.LoggerInit("LOCAL")
+	var configFile string
+	flag.StringVar(&configFile, "config", "config.yaml", "Path to config file")
+	flag.Parse()
 
-	listener, err := net.Listen("tcp", "localhost:8080")
+	serverConfig, err := config.ParseConfig(configFile)
+
 	if err != nil {
-		fmt.Println("Error listening:", err.Error())
-		return
+		panic(err)
 	}
-	defer listener.Close()
-	fmt.Println("Listening on localhost:8080")
 
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Println("Error accepting connection:", err.Error())
-			continue
-		}
-
-		go handleConnection(conn)
+	logger.LoggerInit(serverConfig.LoggerConfig.Mode)
+	server := server.Server{
+		Port: serverConfig.Server.Port,
+		Host: serverConfig.Server.Host,
+		LsmTree: LsmTree.InitNewLSMTree(
+			serverConfig.DBEngineConfig.MaxElementsBeforeFlush,
+			serverConfig.DBEngineConfig.CompactionFrequency,
+		),
 	}
-}
 
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
+	server.Start()
 
-	scanner := bufio.NewScanner(conn)
-	writer := bufio.NewWriter(conn)
-
-	for scanner.Scan() {
-		text := scanner.Text()
-		fmt.Println("Received:", text)
-
-		writer.Flush()
-	}
 }
