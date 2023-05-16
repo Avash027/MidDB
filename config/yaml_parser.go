@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 
@@ -41,11 +40,7 @@ func ParseConfig(filename string) (Config, error) {
 		return serverConfig, err
 	}
 
-	fmt.Println(string(data))
-
 	err = yaml.Unmarshal(data, &serverConfig)
-
-	fmt.Println(serverConfig, err)
 
 	if err != nil {
 		return serverConfig, err

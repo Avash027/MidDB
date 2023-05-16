@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/rs/zerolog v1.29.1
+	github.com/twmb/murmur3 v1.1.7
 	gopkg.in/yaml.v2 v2.4.0
 )
 

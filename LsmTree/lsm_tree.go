@@ -21,6 +21,7 @@ type LSMTree struct {
 	secondaryTree          *TreeNode
 	diskBlocks             []DiskBlock
 	MaxElementsBeforeFlush int
+	BloomFilter            *BloomFilter
 }
 
 func InitNewLSMTree(maxElementsBeforeFlush int, compactionPeriod int) *LSMTree {
@@ -29,6 +30,7 @@ func InitNewLSMTree(maxElementsBeforeFlush int, compactionPeriod int) *LSMTree {
 		secondaryTree:          &TreeNode{},
 		diskBlocks:             []DiskBlock{},
 		MaxElementsBeforeFlush: maxElementsBeforeFlush,
+		BloomFilter:            CreateBloomFilter(DEFAULT_ERROR_RATE, BLOOM_FILTER_MAX_LEN),
 	}
 
 	go lsmTree.PeriodicCompaction(compactionPeriod)
@@ -125,6 +127,12 @@ func (lsmTree *LSMTree) Get(key string) (string, bool) {
 		return pair.Value, true
 	}
 
+	exist := lsmTree.BloomFilter.Contains(key)
+
+	if !exist {
+		return "", false
+	}
+
 	lsmTree.treereadWriteLock.RUnlock()
 	lsmTree.diskReadWriteLock.RLock()
 	defer lsmTree.diskReadWriteLock.RUnlock()
@@ -149,6 +157,8 @@ func (lsmTree *LSMTree) Put(key string, value string) {
 	defer lsmTree.treereadWriteLock.Unlock()
 
 	Insert(&(lsmTree.tree), Pair{key, value, false})
+
+	go lsmTree.BloomFilter.Add(key)
 
 	if lsmTree.tree.GetSize() >= lsmTree.MaxElementsBeforeFlush && lsmTree.secondaryTree == nil {
 		logs.Debug().Msg("Flushing tree because it exceeded max elements threshold")
