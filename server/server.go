@@ -6,14 +6,15 @@ import (
 	"net"
 	"strings"
 
-	"github.com/Avash027/midDB/LsmTree"
+	dbengine "github.com/Avash027/midDB/db_engine"
 	"github.com/Avash027/midDB/logger"
+	LsmTree "github.com/Avash027/midDB/lsm_tree"
 )
 
 type Server struct {
-	Port    string
-	Host    string
-	LsmTree *LsmTree.LSMTree
+	Port     string
+	Host     string
+	DBEngine *dbengine.DBEngine
 }
 
 func (s *Server) Start() {
@@ -32,7 +33,7 @@ func (s *Server) Start() {
 			continue
 		}
 
-		go handleConnection(conn, s.LsmTree)
+		go handleConnection(conn, s.DBEngine.LsmTree)
 	}
 }
 
@@ -50,8 +51,6 @@ func handleConnection(conn net.Conn, ltree *LsmTree.LSMTree) {
 		if len(cmd) == 0 {
 			writer.WriteString("Invalid command\n")
 		}
-
-		fmt.Println(cmd)
 
 		switch cmd[0] {
 		case "PUT":

@@ -23,8 +23,9 @@ type LoggerConfig struct {
 }
 
 type DBEngineConfig struct {
-	MaxElementsBeforeFlush int `yaml:"max_elements_before_flush"`
-	CompactionFrequency    int `yaml:"compaction_frequency_in_ms"`
+	MaxElementsBeforeFlush int    `yaml:"max_elements_before_flush"`
+	CompactionFrequency    int    `yaml:"compaction_frequency_in_ms"`
+	WalPath                string `yaml:"wal_path"`
 }
 
 func ParseConfig(filename string) (Config, error) {

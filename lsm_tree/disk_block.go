@@ -17,7 +17,6 @@ type DiskBlock struct {
 	index         *TreeNode
 	NumOfElements int
 	buffer        bytes.Buffer
-	data          io.ReadSeeker
 }
 
 func NewDiskBlock(elements []Pair) DiskBlock {

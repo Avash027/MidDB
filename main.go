@@ -3,10 +3,12 @@ package main
 import (
 	"flag"
 
-	"github.com/Avash027/midDB/LsmTree"
 	"github.com/Avash027/midDB/config"
+	dbengine "github.com/Avash027/midDB/db_engine"
 	"github.com/Avash027/midDB/logger"
+	LsmTree "github.com/Avash027/midDB/lsm_tree"
 	"github.com/Avash027/midDB/server"
+	"github.com/Avash027/midDB/wal"
 )
 
 func main() {
@@ -21,13 +23,16 @@ func main() {
 	}
 
 	logger.LoggerInit(serverConfig.LoggerConfig.Mode)
+
 	server := server.Server{
 		Port: serverConfig.Server.Port,
 		Host: serverConfig.Server.Host,
-		LsmTree: LsmTree.InitNewLSMTree(
-			serverConfig.DBEngineConfig.MaxElementsBeforeFlush,
-			serverConfig.DBEngineConfig.CompactionFrequency,
-		),
+		DBEngine: &dbengine.DBEngine{
+			LsmTree: LsmTree.InitNewLSMTree(
+				serverConfig.DBEngineConfig.MaxElementsBeforeFlush,
+				serverConfig.DBEngineConfig.CompactionFrequency),
+			Wal: wal.InitWAL(serverConfig.DBEngineConfig.WalPath),
+		},
 	}
 
 	server.Start()
