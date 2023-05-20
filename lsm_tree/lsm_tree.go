@@ -1,11 +1,8 @@
 package LsmTree
 
 import (
-	"fmt"
 	"sync"
 	"time"
-
-	"github.com/Avash027/midDB/logger"
 )
 
 type Pair struct {
@@ -68,10 +65,6 @@ func compact(db1 DiskBlock, db2 DiskBlock) DiskBlock {
 	pairs1 := db1.All()
 	pairs2 := db2.All()
 
-	logs := logger.GetLogger()
-
-	logs.Debug().Msg(fmt.Sprintf("Compacting %v and %v", pairs1, pairs2))
-
 	// merge the two arrays in the increasing order of key values
 	i, j := 0, 0
 	var newPairs []Pair
@@ -101,13 +94,13 @@ func compact(db1 DiskBlock, db2 DiskBlock) DiskBlock {
 }
 
 func (lsmTree *LSMTree) Get(key string) (string, bool) {
-	logs := logger.GetLogger()
+
 	lsmTree.treereadWriteLock.RLock()
 
 	pair, err := lsmTree.tree.Find(key)
 
 	if err == nil {
-		logs.Debug().Msg(fmt.Sprintf("Found %v in tree", pair))
+
 		lsmTree.treereadWriteLock.RUnlock()
 		if pair.Tombstone {
 			return "", false
@@ -119,7 +112,7 @@ func (lsmTree *LSMTree) Get(key string) (string, bool) {
 	pair, err = lsmTree.secondaryTree.Find(key)
 
 	if err == nil {
-		logs.Debug().Msg(fmt.Sprintf("Found %v in secondary tree", pair))
+
 		lsmTree.treereadWriteLock.RUnlock()
 		if pair.Tombstone {
 			return "", false
@@ -140,7 +133,7 @@ func (lsmTree *LSMTree) Get(key string) (string, bool) {
 	for _, diskBlock := range lsmTree.diskBlocks {
 		pair, err = diskBlock.GetDataFromDiskBlock(key)
 		if err == nil {
-			logs.Debug().Msg(fmt.Sprintf("Found %v in disk block", pair))
+
 			if pair.Tombstone {
 				continue
 			}
@@ -152,7 +145,6 @@ func (lsmTree *LSMTree) Get(key string) (string, bool) {
 }
 
 func (lsmTree *LSMTree) Put(key string, value string) {
-	logs := logger.GetLogger()
 	lsmTree.treereadWriteLock.Lock()
 	defer lsmTree.treereadWriteLock.Unlock()
 
@@ -161,7 +153,7 @@ func (lsmTree *LSMTree) Put(key string, value string) {
 	go lsmTree.BloomFilter.Add(key)
 
 	if lsmTree.tree.GetSize() >= lsmTree.MaxElementsBeforeFlush && lsmTree.secondaryTree == nil {
-		logs.Debug().Msg("Flushing tree because it exceeded max elements threshold")
+
 		lsmTree.secondaryTree = lsmTree.tree
 		lsmTree.tree = nil
 		go lsmTree.Flush()
