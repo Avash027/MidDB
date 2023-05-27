@@ -5,6 +5,7 @@ import (
 
 	"github.com/Avash027/midDB/config"
 	dbengine "github.com/Avash027/midDB/db_engine"
+	diskstore "github.com/Avash027/midDB/disk_store"
 	"github.com/Avash027/midDB/logger"
 	LsmTree "github.com/Avash027/midDB/lsm_tree"
 	"github.com/Avash027/midDB/server"
@@ -31,7 +32,8 @@ func main() {
 			LsmTree: LsmTree.InitNewLSMTree(
 				serverConfig.DBEngineConfig.MaxElementsBeforeFlush,
 				serverConfig.DBEngineConfig.CompactionFrequency),
-			Wal: wal.InitWAL(serverConfig.DBEngineConfig.WalPath),
+			Wal:   wal.InitWAL(serverConfig.DBEngineConfig.WalPath),
+			Store: diskstore.New("./data"),
 		},
 	}
 

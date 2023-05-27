@@ -98,7 +98,56 @@ func (d *DiskBlock) All() []Pair {
 	}
 
 	return pairs
+}
 
+func (d *DiskBlock) Del(key string) error {
+	if d.Empty() {
+		return nil
+	}
+
+	start_, err := d.index.GreatestKeyLessThanOrEqualTo(key)
+
+	if err != nil {
+		return err
+	}
+
+	startIndex, _ := strconv.Atoi(start_.Value)
+
+	end_, err := d.index.SmallestKeyGreaterThan(key)
+
+	if err != nil {
+		return err
+	}
+
+	endIndex, _ := strconv.Atoi(end_.Value)
+
+	searchBuffer := bytes.NewBuffer(d.buffer.Bytes()[startIndex:endIndex])
+	dec := gob.NewDecoder(searchBuffer)
+
+	var pairs []Pair
+
+	for {
+		var pair Pair
+		if err := dec.Decode(&pair); err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		if pair.Key != key {
+			pairs = append(pairs, pair)
+		}
+	}
+
+	d.buffer.Reset()
+
+	for _, pair := range pairs {
+		encoder := gob.NewEncoder(&d.buffer)
+		encoder.Encode(pair)
+	}
+
+	d.NumOfElements--
+	return nil
 }
 
 func (d *DiskBlock) Empty() bool {

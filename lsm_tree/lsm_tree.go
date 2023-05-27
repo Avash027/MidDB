@@ -167,6 +167,13 @@ func (lsmTree *LSMTree) Del(key string) {
 	Delete(&(lsmTree.tree), key)
 	Delete(&(lsmTree.secondaryTree), key)
 
+	for _, diskBlock := range lsmTree.diskBlocks {
+		err := diskBlock.Del(key)
+		if err == nil {
+			break
+		}
+	}
+
 }
 
 func (LSMTree *LSMTree) Flush() {

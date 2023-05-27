@@ -30,6 +30,8 @@ func (s *Server) Start() {
 	}
 	defer listener.Close()
 
+	go s.DBEngine.Store.PersistToDisk(s.DBEngine.Wal)
+
 	udpServer, err := net.ListenPacket("udp", ":1053")
 	if err != nil {
 		logs.Err(err).Msg("Error listening UDP")
@@ -40,12 +42,16 @@ func (s *Server) Start() {
 	dataLoadSignal := make(chan bool, 1)
 
 	go func() {
-		err := s.DBEngine.Wal.InitDB(s.DBEngine.LsmTree)
+
+		fmt.Println("Loading data from disk")
+		err := s.DBEngine.LoadFromDisk(s.DBEngine.LsmTree, s.DBEngine.Wal)
 
 		if err != nil {
-			logs.Err(err).Msg("Error initializing DB")
+			logs.Err(err).Msg("Error loading data from disk")
 			panic(err)
 		}
+
+		fmt.Println("Data loaded from disk")
 
 		dataLoadSignal <- true
 	}()
@@ -57,11 +63,11 @@ func (s *Server) Start() {
 
 	go func() {
 		<-sigCh
-		logs.Info().Msg("Shutting down server")
+		logs.Info().Msg("Shutting down server\n")
 		err := s.DBEngine.Wal.Persist()
 
 		if err != nil {
-			logs.Err(err).Msg("Error persisting WAL")
+			logs.Err(err).Msg("Error persisting WAL\n")
 		}
 
 		os.Exit(0)

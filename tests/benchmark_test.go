@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const NUM_OF_TEST = 10000
+const NUM_OF_TEST = 1000000
 
 var keys = make([]string, NUM_OF_TEST)
 var values = make([]string, NUM_OF_TEST)
