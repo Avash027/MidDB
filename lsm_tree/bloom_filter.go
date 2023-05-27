@@ -29,7 +29,14 @@ type BloomFilter struct {
 	bistset         []uint64
 }
 
-func CreateBloomFilter(errorRate float64, capacity int) *BloomFilter {
+type BloomFilterOpts struct {
+	Capacity  int
+	ErrorRate float64
+}
+
+func CreateBloomFilter(opts BloomFilterOpts) *BloomFilter {
+	capacity := opts.Capacity
+	errorRate := opts.ErrorRate
 
 	var bloomOpts BloomParameters
 	bloomOpts.capacity = capacity

@@ -10,64 +10,73 @@ import (
 	"syscall"
 
 	dbengine "github.com/Avash027/midDB/db_engine"
-	"github.com/Avash027/midDB/logger"
 	LsmTree "github.com/Avash027/midDB/lsm_tree"
 	"github.com/Avash027/midDB/wal"
 )
 
+const DEFAULT_TCP_PORT = "8080"
+const DEFAULT_UDP_PORT = "1053"
+const DEFAULT_UDP_BUFFER_SIZE = 1024
+const DEFAULT_HOST = "localhost"
+
 type Server struct {
-	Port     string
-	Host     string
-	DBEngine *dbengine.DBEngine
+	Port          string
+	Host          string
+	DBEngine      *dbengine.DBEngine
+	UDPPort       string
+	UDPBufferSize int
 }
 
 func (s *Server) Start() {
-	logs := logger.GetLogger()
+
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", s.Host, s.Port))
 	if err != nil {
-		logs.Err(err).Msg("Error listening")
+		fmt.Println("Error listening")
 		return
 	}
 	defer listener.Close()
 
-	go s.DBEngine.Store.PersistToDisk(s.DBEngine.Wal)
-
-	udpServer, err := net.ListenPacket("udp", ":1053")
+	udpServer, err := net.ListenPacket("udp", fmt.Sprintf("%s:%s", s.Host, s.UDPPort))
 	if err != nil {
-		logs.Err(err).Msg("Error listening UDP")
+		fmt.Println("Error listening UDP")
 		return
 	}
 	defer udpServer.Close()
 
 	dataLoadSignal := make(chan bool, 1)
+	startPersistingCycleSignal := make(chan bool, 1)
 
 	go func() {
 
 		fmt.Println("Loading data from disk")
+
 		err := s.DBEngine.LoadFromDisk(s.DBEngine.LsmTree, s.DBEngine.Wal)
 
 		if err != nil {
-			logs.Err(err).Msg("Error loading data from disk")
+			fmt.Printf("Error loading data from disk")
 			panic(err)
 		}
 
 		fmt.Println("Data loaded from disk")
 
 		dataLoadSignal <- true
+		startPersistingCycleSignal <- true
 	}()
 
 	<-dataLoadSignal
+
+	go s.DBEngine.Store.PersistToDisk(s.DBEngine.Wal, startPersistingCycleSignal)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-sigCh
-		logs.Info().Msg("Shutting down server\n")
+		fmt.Println("Shutting down server")
 		err := s.DBEngine.Wal.Persist()
 
 		if err != nil {
-			logs.Err(err).Msg("Error persisting WAL\n")
+			fmt.Printf("Error persisting WAL\n")
 		}
 
 		os.Exit(0)
@@ -77,7 +86,7 @@ func (s *Server) Start() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				logs.Err(err).Msg("Error accepting (TCP)")
+				fmt.Printf("Error accepting (TCP)")
 				continue
 			}
 
@@ -87,11 +96,11 @@ func (s *Server) Start() {
 
 	// UDP packets handler
 	go func() {
-		buf := make([]byte, 1024)
+		buf := make([]byte, s.UDPBufferSize)
 		for {
 			n, addr, err := udpServer.ReadFrom(buf)
 			if err != nil {
-				logs.Err(err).Msg("Error reading UDP packet")
+				fmt.Printf("Error reading UDP packet")
 				continue
 			}
 
@@ -123,6 +132,7 @@ func handleConnection(conn net.Conn, ltree *LsmTree.LSMTree, wal *wal.WAL) {
 		case "PUT":
 			if len(cmd) != 3 {
 				writer.WriteString("Invalid command\n")
+				writer.Flush()
 				continue
 			}
 
@@ -130,25 +140,30 @@ func handleConnection(conn net.Conn, ltree *LsmTree.LSMTree, wal *wal.WAL) {
 
 			if err != nil {
 				writer.WriteString("Error writing to WAL\n")
+				writer.Flush()
 				continue
 			}
 
 			ltree.Put(cmd[1], cmd[2])
 			writer.WriteString("OK\n")
+			writer.Flush()
 		case "GET":
 
 			err := wal.Persist()
 
 			if err != nil {
 				writer.WriteString("Error persisting WAL\n")
+				writer.Flush()
 				continue
 			}
 
 			val, exist := ltree.Get(cmd[1])
 			if !exist {
 				writer.WriteString("Data not found\n")
+				writer.Flush()
 			} else {
 				writer.WriteString(val + "\n")
+				writer.Flush()
 			}
 		case "DEL":
 
@@ -156,22 +171,24 @@ func handleConnection(conn net.Conn, ltree *LsmTree.LSMTree, wal *wal.WAL) {
 
 			if err != nil {
 				writer.WriteString("Error writing to WAL\n")
+				writer.Flush()
 				continue
 			}
 
 			ltree.Del(cmd[1])
 			writer.WriteString("OK\n")
+			writer.Flush()
 		default:
 			writer.WriteString("Invalid command\n")
+			writer.Flush()
 		}
 
-		writer.Flush()
 	}
 
 }
 
 func handleUDPPacket(udpConn net.PacketConn, packet []byte, addr net.Addr, ltree *LsmTree.LSMTree, wal *wal.WAL) {
-	logs := logger.GetLogger()
+
 	response := ""
 
 	// Convert the received packet to a string
@@ -211,12 +228,10 @@ func handleUDPPacket(udpConn net.PacketConn, packet []byte, addr net.Addr, ltree
 		}
 	}
 
-	// Convert the response to a byte slice
 	responseBytes := []byte(response)
 
-	// Send the response back to the UDP client
 	_, err := udpConn.WriteTo(responseBytes, addr)
 	if err != nil {
-		logs.Err(err).Msg("Error sending UDP response")
+		fmt.Println("Error sending UDP response")
 	}
 }

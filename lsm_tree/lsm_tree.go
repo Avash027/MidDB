@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+const DEFAULT_MAX_ELEMENTS_BEFORE_FLUSH = 1024
+const DEFAULT_COMPACTION_FREQUENCY = 1000
+const DEFAULT_BLOOM_FILTER_ERROR_RATE = 0.0001
+const DEFAULT_BLOOM_FILTER_CAPACITY = 1000000
+
 type Pair struct {
 	Key       string
 	Value     string
@@ -21,16 +26,22 @@ type LSMTree struct {
 	BloomFilter            *BloomFilter
 }
 
-func InitNewLSMTree(maxElementsBeforeFlush int, compactionPeriod int) *LSMTree {
+type LSMTreeOpts struct {
+	MaxElementsBeforeFlush int
+	CompactionPeriod       int
+	BloomFilterOpts        BloomFilterOpts
+}
+
+func InitNewLSMTree(opts LSMTreeOpts) *LSMTree {
 	lsmTree := &LSMTree{
 		tree:                   &TreeNode{},
 		secondaryTree:          &TreeNode{},
 		diskBlocks:             []DiskBlock{},
-		MaxElementsBeforeFlush: maxElementsBeforeFlush,
-		BloomFilter:            CreateBloomFilter(DEFAULT_ERROR_RATE, BLOOM_FILTER_MAX_LEN),
+		MaxElementsBeforeFlush: opts.MaxElementsBeforeFlush,
+		BloomFilter:            CreateBloomFilter(opts.BloomFilterOpts),
 	}
 
-	go lsmTree.PeriodicCompaction(compactionPeriod)
+	go lsmTree.PeriodicCompaction(opts.CompactionPeriod)
 	return lsmTree
 
 }
@@ -38,7 +49,7 @@ func InitNewLSMTree(maxElementsBeforeFlush int, compactionPeriod int) *LSMTree {
 func (lsmTree *LSMTree) PeriodicCompaction(compactionPeriod int) {
 
 	for {
-		time.Sleep(time.Duration(compactionPeriod) * time.Second)
+		time.Sleep(time.Duration(compactionPeriod) * time.Millisecond)
 		var db1, db2 DiskBlock
 
 		lsmTree.diskReadWriteLock.RLock()

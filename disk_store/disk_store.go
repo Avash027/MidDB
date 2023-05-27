@@ -21,10 +21,13 @@ var (
 	ErrCASConflict = errors.New("compare-and-swap conflict")
 )
 
-const (
-	NUM_PARTITIONS = 20
-	PARTITION      = 10
-)
+const DEFAULT_NUM_OF_PARTITIONS = 10
+const DEFAULT_DIRECTORY = "./data"
+
+type DiskStoreOpts struct {
+	Directory       string
+	NumOfPartitions int
+}
 
 type DiskStore struct {
 	files []*os.File
@@ -33,7 +36,14 @@ type DiskStore struct {
 	Lock  sync.Mutex
 }
 
-func New(dir string) *DiskStore {
+func New(opts DiskStoreOpts) *DiskStore {
+
+	dir := opts.Directory
+	if !strings.HasSuffix(dir, "/") {
+		dir = dir + "/"
+	}
+
+	numOfPartitions := opts.NumOfPartitions
 
 	err := os.MkdirAll(dir, 0755)
 	if err != nil {
@@ -42,12 +52,12 @@ func New(dir string) *DiskStore {
 
 	ds := &DiskStore{
 		dir:   dir,
-		files: make([]*os.File, NUM_PARTITIONS),
-		Locks: make([]*sync.RWMutex, NUM_PARTITIONS),
+		files: make([]*os.File, numOfPartitions),
+		Locks: make([]*sync.RWMutex, numOfPartitions),
 		Lock:  sync.Mutex{},
 	}
 
-	for i := 0; i < NUM_PARTITIONS; i++ {
+	for i := 0; i < numOfPartitions; i++ {
 		filename := fmt.Sprintf("%s/partition_%d", dir, i)
 		file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0644)
 		if err != nil {
@@ -71,20 +81,20 @@ func partition(key string, numPartitions int) int {
 	return int(hash.Sum32() % uint32(numPartitions))
 }
 
-func (ds *DiskStore) PersistToDisk(wl *wal.WAL) {
+func (ds *DiskStore) PersistToDisk(wl *wal.WAL, start <-chan bool) {
+	<-start
+
+	fmt.Println("Starting persisting cycle")
 	for {
 
 		ds.Lock.Lock()
-
 		var wg sync.WaitGroup
-
 		entries := wl.ReadEntries()
-
 		wg.Add(len(entries))
 
 		for _, entry := range entries {
 			go func(entry wal.Entry, wg *sync.WaitGroup) {
-				partition := partition(entry.Key, NUM_PARTITIONS)
+				partition := partition(entry.Key, len(ds.files))
 				file := ds.files[partition]
 
 				defer (*wg).Done()
@@ -114,7 +124,7 @@ func (ds *DiskStore) PersistToDisk(wl *wal.WAL) {
 		wl.Truncate()
 		ds.Lock.Unlock()
 
-		time.Sleep(20 * time.Second)
+		time.Sleep(5 * time.Second)
 
 	}
 }
@@ -187,17 +197,13 @@ func (ds *DiskStore) DeleteFromDisk(file *os.File, key string, partition int) er
 	ds.Locks[partition].RLock()
 	defer ds.Locks[partition].RUnlock()
 
-	// Seek to the beginning of the file
 	_, err := file.Seek(0, io.SeekStart)
 
 	if err != nil {
 		return err
 	}
 
-	// Write the new key-value pair to a buffer
 	var buf bytes.Buffer
-
-	// If there was an existing value, replace it in the buffer
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
@@ -231,13 +237,11 @@ func (ds *DiskStore) GetFileContents(i int) []wal.Entry {
 	ds.Locks[i].RLock()
 	defer ds.Locks[i].RUnlock()
 
-	// Seek to the beginning of the file
 	_, err := ds.files[i].Seek(0, io.SeekStart)
 	if err != nil {
 		return nil
 	}
 
-	// Scan the file for the key
 	scanner := bufio.NewScanner(ds.files[i])
 	var entries []wal.Entry
 	for scanner.Scan() {
@@ -254,8 +258,9 @@ func (ds *DiskStore) GetFileContents(i int) []wal.Entry {
 
 func (ds *DiskStore) LoadFromDisk(lsmTree *LsmTree.LSMTree, wal *wal.WAL) error {
 
-	for i := 0; i < NUM_PARTITIONS; i++ {
+	for i := 0; i < len(ds.files); i++ {
 		entries := ds.GetFileContents(i)
+
 		for _, entry := range entries {
 			lsmTree.Put(entry.Key, entry.Value)
 		}
@@ -264,6 +269,7 @@ func (ds *DiskStore) LoadFromDisk(lsmTree *LsmTree.LSMTree, wal *wal.WAL) error 
 	err := wal.InitDB(lsmTree)
 
 	if err != nil {
+
 		return err
 	}
 

@@ -17,6 +17,8 @@ type Entry struct {
 	Delete bool   `json:"-"`
 }
 
+const DEFAULT_WAL_PATH = "wal.aof"
+
 type WAL struct {
 	filepath string
 	File     *os.File
